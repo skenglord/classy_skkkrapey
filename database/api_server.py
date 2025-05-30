@@ -4,7 +4,7 @@ FastAPI server for accessing MongoDB event data with quality filtering
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pymongo import MongoClient
+import motor.motor_asyncio # Replaced pymongo
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
@@ -27,7 +27,8 @@ app.add_middleware(
 )
 
 # MongoDB connection
-client = MongoClient("mongodb://localhost:27017/")
+# client = MongoClient("mongodb://localhost:27017/") # Old
+client = motor.motor_asyncio.AsyncIOMotorClient("mongodb://localhost:27017/") # New
 db = client.tickets_ibiza_events
 
 
@@ -130,7 +131,7 @@ async def get_events(
         query["dateTime.start"] = {"$gte": datetime.utcnow()}
     
     # Execute query
-    events = list(db.events.find(
+    cursor = db.events.find(
         query,
         {
             "_id": {"$toString": "$_id"},
@@ -141,7 +142,8 @@ async def get_events(
             "qualityScore": "$_quality.overall",
             "status": "$ticketInfo.status"
         }
-    ).sort("dateTime.start", 1).skip(skip).limit(limit))
+    ).sort("dateTime.start", 1).skip(skip).limit(limit)
+    events = await cursor.to_list(length=limit)
     
     return events
 
@@ -154,11 +156,13 @@ async def get_event(event_id: str):
     from bson import ObjectId
     
     try:
-        event = db.events.find_one({"_id": ObjectId(event_id)})
+        event = await db.events.find_one({"_id": ObjectId(event_id)})
         if not event:
             raise HTTPException(status_code=404, detail="Event not found")
         
         # Transform for response
+        # _id is already a string if found due to ObjectId, but if we use projections, it might be different
+        # For find_one, it returns the raw BSON types, so conversion is good.
         event["_id"] = str(event["_id"])
         event["qualityScore"] = event.get("_quality", {}).get("scores", {})
         
@@ -176,7 +180,7 @@ async def search_events(
     """
     Search events by text with quality filtering
     """
-    events = list(db.events.find(
+    cursor = db.events.find(
         {
             "$text": {"$search": search_term},
             "_quality.overall": {"$gte": min_quality}
@@ -191,7 +195,8 @@ async def search_events(
             "status": "$ticketInfo.status",
             "score": {"$meta": "textScore"}
         }
-    ).sort([("score", {"$meta": "textScore"})]).limit(limit))
+    ).sort([("score", {"$meta": "textScore"})]).limit(limit)
+    events = await cursor.to_list(length=limit)
     
     return events
 
@@ -226,7 +231,8 @@ async def get_venues():
         }}
     ]
     
-    venues = list(db.events.aggregate(pipeline))
+    cursor = db.events.aggregate(pipeline)
+    venues = await cursor.to_list(length=None) # Fetch all matching documents
     return venues
 
 
@@ -244,7 +250,7 @@ async def get_venue_events(
     if future_only:
         query["dateTime.start"] = {"$gte": datetime.utcnow()}
     
-    events = list(db.events.find(
+    cursor = db.events.find(
         query,
         {
             "_id": {"$toString": "$_id"},
@@ -255,7 +261,8 @@ async def get_venue_events(
             "qualityScore": "$_quality.overall",
             "status": "$ticketInfo.status"
         }
-    ).sort("dateTime.start", 1).limit(limit))
+    ).sort("dateTime.start", 1).limit(limit)
+    events = await cursor.to_list(length=limit)
     
     return events
 
@@ -290,7 +297,8 @@ async def get_quality_stats():
         }
     ]
     
-    stats_result = list(db.events.aggregate(pipeline))
+    stats_cursor = db.events.aggregate(pipeline)
+    stats_result = await stats_cursor.to_list(length=1) # Expecting a single document
     
     if not stats_result:
         raise HTTPException(status_code=404, detail="No statistics available")
@@ -315,7 +323,8 @@ async def get_quality_stats():
         }}
     ]
     
-    top_venues = list(db.events.aggregate(venue_pipeline))
+    top_venues_cursor = db.events.aggregate(venue_pipeline)
+    top_venues = await top_venues_cursor.to_list(length=10) # Corresponds to $limit: 10
     
     return {
         "totalEvents": stats["totalEvents"],
@@ -341,7 +350,7 @@ async def get_upcoming_events(
     """
     end_date = datetime.utcnow() + timedelta(days=days)
     
-    events = list(db.events.find(
+    cursor = db.events.find(
         {
             "dateTime.start": {
                 "$gte": datetime.utcnow(),
@@ -358,7 +367,8 @@ async def get_upcoming_events(
             "qualityScore": "$_quality.overall",
             "status": "$ticketInfo.status"
         }
-    ).sort("dateTime.start", 1).limit(limit))
+    ).sort("dateTime.start", 1).limit(limit)
+    events = await cursor.to_list(length=limit)
     
     return events
 
@@ -371,7 +381,7 @@ async def refresh_event(event_id: str):
     from bson import ObjectId
     
     try:
-        result = db.events.update_one(
+        result = await db.events.update_one(
             {"_id": ObjectId(event_id)},
             {
                 "$set": {
