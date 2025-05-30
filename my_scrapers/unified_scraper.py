@@ -26,6 +26,7 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup, Tag
 import mistune
 from utils.cleanup_html import cleanup_html
+from config import settings
 
 try:
     from playwright.sync_api import sync_playwright, Browser, Locator, TimeoutError as PlaywrightTimeoutError
@@ -558,11 +559,8 @@ def main():
     parser.add_argument("--url", type=str, help="URL of single event detail page (for 'scrape' mode).")
     parser.add_argument("--month", type=int, help="Month (1-12) (for 'crawl' mode, e.g., 5 for May).")
     parser.add_argument("--year", type=int, help="Year (e.g., 2025) (for 'crawl' mode).")
-    parser.add_argument("--no-headless", action="store_false", dest="headless", default=True, help="Show browser.")
-    parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR, help="Output directory.")
+    # Headless, output-dir, min-delay, max-delay are now handled by settings
     parser.add_argument("--format", nargs='+', choices=["json", "csv", "md"], default=["json", "csv"], help="Output format(s).")
-    parser.add_argument("--min-delay", type=float, default=2.5, help="Min random delay (s) between Playwright actions.")
-    parser.add_argument("--max-delay", type=float, default=6.0, help="Max random delay (s) between Playwright actions.")
     args = parser.parse_args()
 
     if args.action == "scrape":
@@ -573,11 +571,15 @@ def main():
         if not (1 <= args.month <= 12): parser.error("Month must be 1-12.")
         if args.year < 2000 or args.year > datetime.now().year + 5: parser.error(f"Year seems invalid ({args.year}). Please provide a realistic year.")
 
-    args.output_dir.mkdir(exist_ok=True, parents=True)
+    Path(settings.SCRAPER_DEFAULT_OUTPUT_DIR).mkdir(exist_ok=True, parents=True)
     scraper = None
     all_events_data: List[Event] = []
     try:
-        scraper = IbizaSpotlightUnifiedScraper(headless=args.headless, min_delay=args.min_delay, max_delay=args.max_delay)
+        scraper = IbizaSpotlightUnifiedScraper(
+            headless=settings.SCRAPER_DEFAULT_HEADLESS,
+            min_delay=settings.SCRAPER_DEFAULT_MIN_DELAY,
+            max_delay=settings.SCRAPER_DEFAULT_MAX_DELAY
+        )
         if args.action == "scrape":
             event = scraper.scrape_single_event(args.url)
             if event: all_events_data.append(event)
@@ -599,7 +601,7 @@ def main():
                 name_part = "unknown_operation"
 
             base_name = f"{action_part}_{name_part}_{timestamp}"
-            filepath_base = args.output_dir / base_name
+            filepath_base = Path(settings.SCRAPER_DEFAULT_OUTPUT_DIR) / base_name
             save_events_to_file(all_events_data, filepath_base, args.format)
     except KeyboardInterrupt: print("\n[INFO] Scraping interrupted by user.")
     except ImportError as e:

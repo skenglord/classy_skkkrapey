@@ -1,5 +1,6 @@
 # Core Dependencies
 pydantic
+pydantic-settings
 fp>=0.1.0
 playwright
 
