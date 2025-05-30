@@ -24,6 +24,7 @@ pip install --upgrade pip
 echo "Installing dependencies..."
 pip install -r requirements.txt
 
+#
 # Final instructions
 echo "Setup completed successfully!"
 echo "To activate environment: source env/bin/activate"
