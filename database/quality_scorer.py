@@ -4,7 +4,7 @@ Implements field-specific validation and confidence scoring
 """
 
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple, Any
 from collections import defaultdict
 import logging
@@ -190,7 +190,10 @@ class QualityScorer:
                     flags.append("invalid_date_format")
             
             if isinstance(start_date, datetime):
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc) # Use timezone-aware UTC now
+                if start_date.tzinfo is None: # If start_date became naive (e.g. passed as naive datetime object)
+                    start_date = start_date.replace(tzinfo=timezone.utc) # Assume UTC if naive
+
                 if start_date < now - timedelta(days=30):
                     flags.append("date_too_far_past")
                 elif start_date > now + timedelta(days=365):
