@@ -1,7 +1,7 @@
 """
 FastAPI server for accessing MongoDB event data with quality filtering
 """
-
+from config import settings
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 import motor.motor_asyncio # Replaced pymongo
@@ -28,7 +28,7 @@ app.add_middleware(
 
 # MongoDB connection
 # client = MongoClient("mongodb://localhost:27017/") # Old
-client = motor.motor_asyncio.AsyncIOMotorClient("mongodb://localhost:27017/") # New
+client = motor.motor_asyncio.AsyncIOMotorClient(settings.MONGODB_URI) # New
 db = client.tickets_ibiza_events
 
 

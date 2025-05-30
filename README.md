@@ -24,7 +24,7 @@ This project is designed to scrape event information from key Ibiza event websit
     *   BeautifulSoup4 (for HTML parsing)
 *   **API Development:**
     *   FastAPI
-    *   Pydantic (for data validation and settings)
+    *   Pydantic (for data validation and settings management via pydantic-settings)
 *   **Database:**
     *   MongoDB
     *   Pymongo (driver)
@@ -38,6 +38,7 @@ Before you begin, ensure you have the following installed:
 *   Python 3.9 or higher
 *   MongoDB
 *   Access to a terminal or command prompt
+*   A `.env` file (copied from `.env.example`) for custom configuration (e.g., MongoDB URI, scraper settings).
 
 ## Setup and Installation
 
@@ -71,44 +72,47 @@ Before you begin, ensure you have the following installed:
 
 5.  **MongoDB Setup:**
     *   Ensure your MongoDB instance is running.
-    *   The project includes scripts and guidelines for setting up the necessary collections and potentially indexes. Refer to `database/README.md` and `database/mongodb_setup.py` for detailed instructions on configuring the database schema. You might need to adjust the MongoDB connection URI in `database/api_server.py` or relevant configuration files if not using default settings.
+    *   MongoDB connection URI and other settings are managed via environment variables. Copy the `.env.example` file to `.env` and customize it with your settings (e.g., MongoDB URI).
+    *   The project includes scripts and guidelines for setting up the necessary collections and potentially indexes. Refer to `database/README.md` and `database/mongodb_setup.py` for detailed instructions on configuring the database schema.
 
 ## Usage
 
-### Scraper (`my_scrapers/classy_skkkrapey.py`)
+### Scraper (`my_scrapers/unified_scraper.py`)
 
-The main scraper script is used to fetch and process event data from the target websites.
+The main scraper script (`my_scrapers/unified_scraper.py`) is used to fetch and process event data from Ibiza Spotlight. Default scraper settings (like output directory, headless mode, and request delays) are configured via environment variables in the `.env` file. The command-line options for the scraper now focus on operational parameters like the action (scrape/crawl) and target URLs/dates.
 
-**Basic Command Structure:**
+**Basic Command Structure (for `unified_scraper.py`):**
 ```bash
-python my_scrapers/classy_skkkrapey.py <URL> <action> [options]
+python my_scrapers/unified_scraper.py <action> [options]
 ```
 
 **Actions:**
-*   `scrape`: Scrapes a single event detail page.
-*   `crawl`: Crawls a listing page to find multiple event URLs and then scrapes each one.
+*   `scrape`: Scrapes a single event detail page. Requires `--url`.
+*   `crawl`: Crawls a monthly calendar. Requires `--month` and `--year`.
 
-**Common Options:**
-*   `-v`, `--verbose`: Enable verbose logging.
-*   `-H`, `--headless`: Control whether Playwright runs in headless mode (default is True).
-*   `--delay`: Set a delay between requests.
-*   `--user_agent`: Specify a custom User-Agent.
+**Retained Command-Line Options:**
+*   `--url URL`: URL of the single event detail page (for 'scrape' action).
+*   `--month MONTH`: Month (1-12) for 'crawl' action.
+*   `--year YEAR`: Year (e.g., 2025) for 'crawl' action.
+*   `--format {json,csv,md}`: Output format(s). Default: json csv.
 
-**Example Commands:**
+**Example Commands (for `unified_scraper.py`):**
 
-*   **Crawl Ibiza Spotlight for events:**
+*   **Crawl Ibiza Spotlight for May 2025 events:**
     ```bash
-    python my_scrapers/classy_skkkrapey.py https://www.ibiza-spotlight.com/nightlife/club_dates_i.htm crawl -v
+    python my_scrapers/unified_scraper.py crawl --month 5 --year 2025
     ```
-*   **Scrape a specific event from Tickets Ibiza:**
+*   **Scrape a specific event from Ibiza Spotlight:**
     ```bash
-    python my_scrapers/classy_skkkrapey.py https://ticketsibiza.com/event/amnesia-ibiza-closing-festival-2024 scrape -v
+    python my_scrapers/unified_scraper.py scrape --url https://www.ibiza-spotlight.com/night/events/2024/09/some-event-slug
     ```
+*Note: Other scrapers might exist in `my_scrapers/` with different CLI options. The above refers to `unified_scraper.py` which has been updated for the new configuration system.*
 
 **Output:**
-The scraper saves output as:
-*   JSON files (containing the structured event data) in the `output/json/` directory.
-*   Markdown files (human-readable summaries) in the `output/markdown/` directory.
+The scraper saves output to the directory specified by `SCRAPER_DEFAULT_OUTPUT_DIR` in your `.env` file (default is `output/`).
+*   JSON files (containing structured event data).
+*   CSV files (containing structured event data).
+*   Markdown files (for fallback content if detailed parsing fails, or as specified).
 
 ### API Server (`database/api_server.py`)
 

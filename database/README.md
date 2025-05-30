@@ -6,8 +6,9 @@ This directory contains the implementation of a MongoDB-based data quality scori
 
 1. **MongoDB Installation**
    - Install MongoDB Community Edition: https://www.mongodb.com/docs/manual/installation/
-   - Ensure MongoDB is running locally on default port 27017
-   - Or use Docker: `docker run -d -p 27017:27017 --name mongodb mongo:latest`
+   - Ensure MongoDB is running.
+   - The MongoDB connection URI for the API server and other database scripts is configured via the `MONGODB_URI` environment variable, typically set in a `.env` file (see `.env.example` in the root directory). Default is `mongodb://localhost:27017/`.
+   - Or use Docker: `docker run -d -p 27017:27017 --name mongodb mongo:latest` (Ensure your `.env` file's `MONGODB_URI` matches if not using localhost).
 
 2. **Python Dependencies**
    ```bash
