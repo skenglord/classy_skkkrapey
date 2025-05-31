@@ -443,26 +443,150 @@ This script, "Unified Ibiza Spotlight Event Scraper", is specifically tailored f
 
 ## 9. `fixed_scraper.py`
 
+This script, "Enhanced Ibiza Spotlight Event Scraper (v4.0) - Professional Grade", is another iteration specifically for `www.ibiza-spotlight.com`. It emphasizes a "rewritten parsing logic to match the site's row-based structure" and uses `playwright-stealth` along with "human-like interactions". It defines its own `Event` dataclass.
+
 ### Scraping Methods
+*   `fetch_page_html` (in `IbizaSpotlightScraper`)
+    *   Reusability: 2 (Playwright logic is somewhat generic, but tailored with specific waits like for `#PartyCalBody` and use of `playwright-stealth`. Site-specific focus.)
+    *   Robustness: 4 (Integrates `playwright-stealth`, overlay handling, specific waits for content, and saves DOM snapshot on timeout. This is quite robust for its target.)
+    *   Effectiveness & Configurability: 3 (Effective for Ibiza Spotlight. Headless mode configurable. UA randomized. Delays configurable.)
+    *   Overall: A robust, site-specific Playwright fetcher with enhanced stealth and debugging.
+
 ### Crawling Methods
+*   `crawl_month` (in `IbizaSpotlightScraper`)
+    *   Reusability: 1 (Hardcoded URL structure for Ibiza Spotlight calendar. Orchestrates `fetch_page_html` and the specialized `parse_html_events`.)
+    *   Robustness: 3 (Depends on the success of `fetch_page_html` and `parse_html_events`.)
+    *   Effectiveness & Configurability: 2 (Effective for the target site's specific calendar structure. Year/month are parameters, but core logic is site-specific.)
+    *   Overall: Site-specific crawling orchestration, notable for its unique row-based parsing strategy.
+
 ### Parsing Methods
+*   `parse_html_events` (in `IbizaSpotlightScraper`)
+    *   Reusability: 1 (The logic of iterating venue rows (`.partyCal-row`), then day cells (`li.partyCal-day`), using date headers (`.partyCal-head li a`), and then calling `Event.from_html` is extremely specific to the Ibiza Spotlight calendar's unique HTML table/row layout.)
+    *   Robustness: 2 (Highly dependent on the stability of complex and specific CSS selectors and HTML structure. Errors in date parsing or card parsing are handled per item, which is good, but the overall structure must match.)
+    *   Effectiveness & Configurability: 3 (Likely effective for the very specific row-based layout it targets. Not configurable for other layouts.)
+    *   Overall: This is the core "fixed" or specialized parsing strategy for Ibiza Spotlight's unique calendar. Highly site-specific.
+*   `Event.from_html` (classmethod)
+    *   Reusability: 1 (CSS selectors like `h3.h3 a.trackEventSpotlight`, `time`, `.price`, `.partyDj a` are specific to the event cards within the Ibiza Spotlight calendar rows/cells.)
+    *   Robustness: 2 (Basic try-except `Exception` for parsing an individual card. Relies on the specific card structure holding up.)
+    *   Effectiveness & Configurability: 3 (Effective for its target card structure. Not configurable.)
+    *   Overall: Site-specific parser for individual event items within the row-based calendar.
+*   `Event._parse_time`, `Event._parse_price` (staticmethods)
+    *   Reusability: 3 (Regex for time `(\d{1,2}):(\d{2})` and price `\d+\.?\d*` are somewhat generic but might need adjustment for different formats or more complex price strings with ranges/text.)
+    *   Robustness: 2 (Basic regex matching. Price parsing handles common currency symbols but might be fragile with varied formats. Time parsing is simple for HH:MM.)
+    *   Effectiveness & Configurability: 3 (Effective for simple HH:MM times and common price formats. Not highly configurable without changing regex.)
+    *   Overall: Simple helper methods for common data type parsing; could be part of a utility library if made more robust.
+
 ### Stealth Methods
+*   `_ensure_browser` & Playwright setup (using `playwright-stealth`)
+    *   Reusability: 3 (General pattern for initializing Playwright with `playwright-stealth` is reusable.)
+    *   Robustness: 4 (Using `playwright-stealth` significantly improves robustness against bot detection compared to vanilla Playwright.)
+    *   Effectiveness & Configurability: 4 (Applies `playwright-stealth`. Configurable headless mode. Random UA from a list.)
+    *   Overall: Strong Playwright setup incorporating a dedicated stealth library. This is a good pattern.
+*   `human_click` (in `IbizaSpotlightScraper`)
+    *   Reusability: 4 (Attempts to simulate more human-like clicks with random offsets and mouse movements. Logic is generic for Playwright `Locator` objects.)
+    *   Robustness: 3 (Includes fallbacks to direct Playwright click if bounding box detection fails or other errors occur. Uses timeouts.)
+    *   Effectiveness & Configurability: 3 (Potentially more effective at avoiding some bot detection than direct `.click()`. Delays are somewhat hardcoded but based on class min/max delay.)
+    *   Overall: A good reusable component for more robust Playwright interactions, similar to the one in `unified_scraper.py`.
+*   `handle_overlays` (in `IbizaSpotlightScraper`)
+    *   Reusability: 3 (The list of common overlay CSS selectors provides a decent starting point for generic overlay handling. Logic to iterate and click is reusable.)
+    *   Robustness: 2 (Relies on common selectors. May not handle all types of overlays, especially those with dynamic/obfuscated class names or complex interactions. Uses `is_visible` with timeout.)
+    *   Effectiveness & Configurability: 3 (Can handle many common cookie banners/overlays. Selectors are hardcoded but could be parameterized.)
+    *   Overall: Good attempt at a generic overlay handler, similar to the one in `unified_scraper.py`.
+*   Random delays (`_get_random_delay`)
+    *   Reusability: 5 (Standard utility for adding random delays.)
+    *   Robustness: 5 (Simple and effective; no error modes.)
+    *   Effectiveness & Configurability: 4 (Min/max delays are class attributes, allowing some configuration. Multiplier provides call-site control.)
+    *   Overall: Standard and good practice for mimicking human browsing speed.
 
 ---
 
 ## 10. `improved_scraping_execution.py`
 *(Determine if it contains scraper components or is an execution script)*
 
+This script is an **orchestration and execution script**, not a provider of new, fundamental scraper components (like page fetching or parsing logic). It imports `BaseEventScraper`, `EventSchema`, and `ScraperConfig` from `classy_skkkrapey.py` and is designed to work with instances of scrapers derived from `BaseEventScraper`.
+
+**Core Purpose:**
+The script defines a `ScrapingExecutor` class that takes a scraper instance and a configuration, then manages the execution of scraping or crawling tasks. It enhances the execution with features like:
+*   Detailed progress tracking (`ScrapingProgress` dataclass).
+*   Retry logic for scraping individual URLs (`_scrape_with_retry`).
+*   Centralized error handling and reporting (`_handle_scraping_error`, `_save_error_report`).
+*   URL validation (normalization, deduplication) before scraping (`_validate_urls`).
+*   Optional concurrent scraping using `ThreadPoolExecutor` for multiple URLs (`_scrape_concurrent`).
+*   Enhanced logging throughout the process.
+
+**Evaluation as Scraper Components:**
+Since this script primarily orchestrates and enhances the execution of other scraper components (defined in `classy_skkkrapey.py`), it doesn't offer new low-level scraping, parsing, or stealth methods for evaluation in the same way as the other scraper modules.
+
+*   **Reusability:** The `ScrapingExecutor` class itself is highly reusable if one wants to add robust execution features around any scraper that conforms to the `BaseEventScraper` interface (i.e., has `scrape_event_data` and `crawl_listing_for_events` methods). Score: 4.
+*   **Robustness:** It significantly enhances the robustness of a scraping *process* through retries, error logging, and potentially concurrent execution. Score: 4.
+*   **Effectiveness & Configurability:** It's effective in managing complex scraping tasks. Configuration is via `ScraperConfig`. Score: 4.
+*   **Overall Recommendation:** Keep. This provides valuable execution management logic that should ideally be integrated or used by the main application/CLI runner. It's not a scraper *component* per se, but an excellent *component manager/executor*.
+
 ### Scraping Methods
+*   (N/A - Uses methods from the passed `scraper_instance`)
+
 ### Crawling Methods
+*   (N/A - Uses methods from the passed `scraper_instance`)
+
 ### Parsing Methods
+*   (N/A - Uses methods from the passed `scraper_instance`)
+
 ### Stealth Methods
+*   (N/A - Relies on stealth features of the passed `scraper_instance`)
 
 ---
 
 ## Overall Synthesis & Recommendations
 
-*   Highly Reusable Components:
-*   Redundant/Obsolete Methods:
-*   Priorities for Modularization:
-*   Candidates for Deletion:
+The scrapers in `my_scrapers/` show an evolution of techniques and approaches. Early scripts often mix orchestration, site-specific logic, and potentially reusable components. Later scripts like `classy_skkkrapey.py` and `mono_basic_html.py` demonstrate a move towards more modular and reusable base components, while `improved_scraping_execution.py` provides a good model for an orchestration layer. Several scripts tackle similar sites (Ibiza Spotlight, TicketsIbiza) with different strategies, leading to some redundancy.
+
+*   **Highly Reusable Components:**
+    *   **Fetching Logic:**
+        *   `BaseEventScraper.fetch_page` (from `classy_skkkrapey.py`): Best all-around fetcher with dual requests/Playwright modes, UA rotation, and error handling. (Overall Score based on its analysis: 4)
+        *   `BasicHTMLScraper.fetch_page` (from `mono_basic_html.py`): Good, simple `requests`-only fetcher for static sites. (Score: 4)
+        *   Advanced Playwright Setup: Patterns from `mono_ibiza_spotlight_patched.py` (`_ensure_browser` with resource blocking), `unified_scraper.py` (`_ensure_browser` with UA randomization, `_handle_overlays`), and `fixed_scraper.py` (adding `playwright-stealth`, `human_click`) should be combined for a top-tier Playwright fetching utility.
+    *   **Parsing Utilities:**
+        *   `TicketsIbizaScraper._parse_json_ld` (from `classy_skkkrapey.py`): Robust and effective for standard `MusicEvent` JSON-LD. (Score: 4)
+        *   `MultiLayerEventScraper.extract_meta_data` (from `mono_ticketmaster.py`): Good for generic OpenGraph/meta tag extraction. (Score: 4)
+        *   `BasicHTMLScraper.extract_css` & `extract_xpath` (from `mono_basic_html.py`): Excellent, configurable general-purpose content extractors. (Score: 5)
+        *   `format_event_to_markdown` (from `classy_skkkrapey.py`): Clean, robust, uses the preferred `EventSchema`. (Score: 5)
+    *   **Stealth & Interaction Utilities:**
+        *   Session Management: `BaseEventScraper._create_session` and `rotate_user_agent` (from `classy_skkkrapey.py`) provide a good base for `requests`.
+        *   Playwright Interactions: `_human_click`, `_handle_overlays` (from `unified_scraper.py`, `fixed_scraper.py`) are valuable for robust Playwright scripting. `playwright-stealth` integration (from `fixed_scraper.py`) is crucial for Playwright's effectiveness.
+        *   Delay Mechanism: `_get_random_delay` (from `unified_scraper.py`, `fixed_scraper.py`) is standard good practice.
+    *   **Execution Orchestration:**
+        *   `ScrapingExecutor` class (from `improved_scraping_execution.py`): Excellent framework for managing scraping tasks, retries, concurrency, and error reporting. Should be the standard way to run scrapers. (Score: 4 for reusability with compatible scraper interfaces)
+
+*   **Redundant/Obsolete Methods & Scrapers:**
+    *   **Fetching:** `mono_ticketmaster.py`'s `fetch_page` is largely superseded by `classy_skkkrapey.py`'s more robust and configurable version. `playwright_mistune_scraper.py`'s fetching is too basic.
+    *   **Crawling:** The standalone `crawl_listing_for_events` in `mono_ticketmaster.py` is less robust and more site-specific than the class-based crawlers in `classy_skkkrapey.py`. The crawling logic embedded in `playwright_mistune_scraper.py`'s `main` is not reusable.
+    *   **Parsing:**
+        *   Many site-specific HTML parsing methods/selectors found in `mono_ticketmaster.py` (e.g., `extract_wordpress_data`, `extract_lineup_from_html`, `extract_ticket_url_from_html`), `ibiza_events_spider.py` (`parse_event` selectors), `playwright_mistune_scraper.py` (title selector), and `mono_ibiza_spotlight_patched.py` (`_parse_events_html`) are too brittle. These should be replaced by strategies prioritizing structured data (JSON-LD, Microdata) first, then falling back to highly configurable generic extractors (CSS/XPath from `mono_basic_html.py`) if necessary for specific sites.
+        *   `mono_ticketmaster.py`'s `extract_jsonld_data` is good but `classy_skkkrapey.py`'s `_parse_json_ld` is slightly preferred.
+        *   Schema mapping functions in `mono_ticketmaster.py` are tied to its specific, more complex `EventSchemaTypedDict`. The direct parsing into `EventSchema` in `classy_skkkrapey.py` is preferred.
+        *   The `format_event_to_markdown` in `mono_ticketmaster.py` is redundant due to the superior and tested version in `classy_skkkrapey.py`.
+    *   **Stealth:** Basic User-Agent settings in older/simpler scripts (e.g., `mono_ibiza_spotlight_patched.py`, `mono_basic_html.py`) are less advanced than rotation strategies or `playwright-stealth` integration.
+
+*   **Priorities for Modularization:**
+    *   **Core Scraper Library/Framework:**
+        *   A generic `Fetcher` utility/class: Abstracting the best of `BaseEventScraper.fetch_page` (dual mode, UA rotation) and advanced Playwright techniques from `fixed_scraper.py`/`unified_scraper.py` (stealth, overlay handling, human-like clicks, robust page state waits, resource blocking).
+        *   A `Parser` utility module:
+            *   Standardized `parse_jsonld` (from `classy_skkkrapey.py`).
+            *   An improved, more robust `parse_microdata` (current one in `classy_skkkrapey.py` is too basic).
+            *   `extract_meta_tags` (from `mono_ticketmaster.py`).
+            *   The `extract_css` and `extract_xpath` methods from `mono_basic_html.py` as core tools.
+        *   A single, standardized `EventSchema` (likely based on `classy_skkkrapey.py`'s simpler version, extended as needed).
+        *   Common Utilities: `format_event_to_markdown` (from `classy_skkkrapey.py`), `cleanup_html` (if proven robust, from `unified_scraper.py` context), delay mechanisms.
+    *   **Site-Specific Scrapers:** These should become lightweight classes inheriting from a new common base (or using the core library components). Their main role would be to define site-specific configurations:
+        *   Target URLs and URL patterns.
+        *   Selectors/XPaths for any necessary HTML fallback parsing (using the generic CSS/XPath extractors).
+        *   Logic to choose which parsing strategies to apply (e.g., JSON-LD first, then Microdata, then HTML).
+    *   **Execution Framework:** `ScrapingExecutor` from `improved_scraping_execution.py` should be adopted/adapted as the standard way to run scraping tasks, providing concurrency, retries, progress tracking, and error reporting.
+
+*   **Candidates for Deletion (or heavy refactoring to extract only unique, valuable logic):**
+    *   **`mono_ticketmaster.py`**: Largely superseded by `classy_skkkrapey.py` and `mono_basic_html.py` for its reusable parts. Its `extract_meta_data` is worth salvaging.
+    *   **`mono_ticketmaster_with_db.py`**: Logic for DB interaction is separate from scraping components. If `mono_ticketmaster.py` is deprecated, this follows. Quality scoring could be a separate module.
+    *   **`playwright_mistune_scraper.py`**: Basic, site-specific, little reusable value. "Mistune" aspect seems a misnomer.
+    *   **`ibiza_events_spider.py`**: Its Scrapy-specific implementation for `ticketsibiza.com` is likely redundant if `classy_skkkrapey.TicketsIbizaScraper` (which also handles this site with Playwright for dynamic content) is sufficiently robust. The Scrapy/Playwright integration patterns are noted but may not be needed if a unified non-Scrapy framework is pursued.
+    *   **`mono_ibiza_spotlight_patched.py`**: An evolutionary step for scraping Ibiza Spotlight. Its JSON-first strategy and Playwright setup are good, but `classy_skkkrapey.IbizaSpotlightScraper` along with advanced techniques from `unified_scraper.py` and `fixed_scraper.py` should form the basis of the final Spotlight scraper.
+    *   **`unified_scraper.py` & `fixed_scraper.py`**: These are advanced, site-specific implementations for Ibiza Spotlight. Their value is in the techniques they demonstrate (human clicks, overlay handling, specific parsing logic for Spotlight's row/card structure, `playwright-stealth`). These techniques should be evaluated and potentially merged into a refined, single Ibiza Spotlight scraper (likely an evolution of `classy_skkkrapey.IbizaSpotlightScraper`) or into the core Playwright utility class, rather than existing as standalone monolithic scripts. If their specific parsing logic for Spotlight's unique calendar structure is still the most effective, that part is valuable but it's highly site-specific.
